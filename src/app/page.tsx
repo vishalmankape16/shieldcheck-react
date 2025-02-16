@@ -4,7 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shield, Lock, Eye, AlertTriangle } from 'lucide-react'
+import { Shield, Lock, Eye, AlertTriangle, Camera, Book, Webhook, FileWarning } from 'lucide-react'
+import { UrlScanner } from '@/components/url-scanner'
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 
@@ -21,11 +22,32 @@ interface AnalysisResult {
     score: number;
     issues: string[];
   };
+  phishing: {
+    score: number;
+    issues: string[];
+  };
+  malware: {
+    score: number;
+    issues: string[];
+  };
+  webAttacks: {
+    score: number;
+    issues: string[];
+  };
+  certificateTransparency: {
+    score: number;
+    issues: string[];
+  };
+  libraries: {
+    score: number;
+    issues: string[];
+  };
 }
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [url, setUrl] = useState('')
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -45,10 +67,34 @@ export default function Home() {
         vulnerabilities: {
           score: 90,
           issues: ["No critical vulnerabilities found", "Server version exposed"]
+        },
+        phishing: {
+          score: 95,
+          issues: ["No suspicious redirects detected", "Domain age verification passed"]
+        },
+        malware: {
+          score: 100,
+          issues: ["No malware detected", "Clean in major blacklists"]
+        },
+        webAttacks: {
+          score: 80,
+          issues: ["CSRF tokens implemented", "XSS protection headers missing"]
+        },
+        certificateTransparency: {
+          score: 90,
+          issues: ["Certificate logged in CT logs", "Multiple CT log providers found"]
+        },
+        libraries: {
+          score: 75,
+          issues: ["jQuery version outdated", "3 npm packages need updates"]
         }
       })
       setIsLoading(false)
     }, 2000)
+  }
+
+  const handleUrlDetected = (detectedUrl: string) => {
+    setUrl(detectedUrl)
   }
 
   return (
@@ -83,12 +129,17 @@ export default function Home() {
               <div className="w-full max-w-sm space-y-2">
                 <form onSubmit={handleSubmit}>
                   <div className="flex space-x-2">
-                    <Input
-                      className="flex-1"
-                      placeholder="Enter website URL"
-                      type="url"
-                      required
-                    />
+                    <div className="flex-1 relative">
+                      <Input
+                        className="pr-12"
+                        placeholder="Enter website URL"
+                        type="url"
+                        required
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                      />
+                      <UrlScanner onUrlDetected={handleUrlDetected} />
+                    </div>
                     <Button type="submit" disabled={isLoading}>
                       {isLoading ? 'Analyzing...' : 'Analyze'}
                     </Button>
@@ -106,7 +157,7 @@ export default function Home() {
               <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-center mb-8">
                 Security Analysis Results
               </h2>
-              <div className="grid gap-6 lg:grid-cols-3">
+              <div className="grid gap-6 lg:grid-cols-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>SSL/TLS</CardTitle>
@@ -146,6 +197,71 @@ export default function Home() {
                     </ul>
                   </CardContent>
                 </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Phishing Detection</CardTitle>
+                    <CardDescription>Score: {analysisResult.phishing.score}/100</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-4">
+                      {analysisResult.phishing.issues.map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Malware Scan</CardTitle>
+                    <CardDescription>Score: {analysisResult.malware.score}/100</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-4">
+                      {analysisResult.malware.issues.map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Web Attacks Protection</CardTitle>
+                    <CardDescription>Score: {analysisResult.webAttacks.score}/100</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-4">
+                      {analysisResult.webAttacks.issues.map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Certificate Transparency</CardTitle>
+                    <CardDescription>Score: {analysisResult.certificateTransparency.score}/100</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-4">
+                      {analysisResult.certificateTransparency.issues.map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Library Analysis</CardTitle>
+                    <CardDescription>Score: {analysisResult.libraries.score}/100</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-4">
+                      {analysisResult.libraries.issues.map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </section>
@@ -157,7 +273,7 @@ export default function Home() {
             <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-center mb-8">
               Security Parameters We Check
             </h2>
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-4">
               <Card>
                 <CardHeader>
                   <CardTitle>
@@ -189,6 +305,50 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <p>We scan for known vulnerabilities in your server configuration and software.</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <Camera className="w-4 h-4 inline-block mr-2" />
+                    Phishing Detection
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>Advanced scanning for phishing attempts and suspicious patterns.</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <Shield className="w-4 h-4 inline-block mr-2" />
+                    Malware Protection
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>Comprehensive malware scanning and blacklist checking.</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <Webhook className="w-4 h-4 inline-block mr-2" />
+                    Web Attack Prevention
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>Detection of CSRF, XSS, and other common web attacks.</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <FileWarning className="w-4 h-4 inline-block mr-2" />
+                    Library Analysis
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>Check for outdated and vulnerable dependencies in your codebase.</p>
                 </CardContent>
               </Card>
             </div>
