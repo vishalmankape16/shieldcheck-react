@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shield, Lock, Eye, AlertTriangle, Camera, Book, Webhook, FileWarning } from 'lucide-react'
+import { Shield, Lock, Eye, AlertTriangle, Camera, Webhook, FileWarning } from 'lucide-react'
 import { UrlScanner } from '@/components/url-scanner'
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -123,7 +123,7 @@ export default function Home() {
                   Check Your Website Security
                 </h1>
                 <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
-                  Analyze your website's security in seconds. Get a comprehensive report on vulnerabilities and best practices.
+                  Analyze your websites security in seconds. Get a comprehensive report on vulnerabilities and best practices.
                 </p>
               </div>
               <div className="w-full max-w-sm space-y-2">
