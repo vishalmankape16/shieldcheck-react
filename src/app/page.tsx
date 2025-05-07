@@ -2,45 +2,52 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Toaster, toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shield, Lock, Eye, AlertTriangle, Camera, Webhook, FileWarning } from 'lucide-react'
+import { Shield, Lock, Eye, AlertTriangle, Camera, Webhook, FileWarning, CheckCircle2, XCircle, AlertOctagon } from 'lucide-react'
 import { UrlScanner } from '@/components/url-scanner'
+import { env } from '@/config/env'
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+
+interface SecurityIssue {
+  message: string;
+  severity: 'high' | 'medium' | 'low' | 'info';
+}
 
 interface AnalysisResult {
   ssl: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   contentSecurity: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   vulnerabilities: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   phishing: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   malware: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   webAttacks: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   certificateTransparency: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
   libraries: {
     score: number;
-    issues: string[];
+    issues: SecurityIssue[];
   };
 }
 
@@ -52,45 +59,120 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setAnalysisResult(null)
 
-    // Simulate API call with mock data
-    setTimeout(() => {
+    const loadingToast = toast.loading('Analyzing website security...', {
+      description: 'Please wait while we check various security parameters.',
+    })
+
+    try {
+      const response = await fetch(`${env.apiHost}/check-website`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          response.status === 404 ? 'Website not found'
+          : response.status === 429 ? 'Too many requests, please try again later'
+          : response.status === 400 ? 'Invalid URL format'
+          : 'Failed to analyze website'
+        );
+      }
+
+      const data = await response.json();
+      
+      // Transform the API response to match our interface
       setAnalysisResult({
         ssl: {
-          score: 85,
-          issues: ["Certificate expires in 30 days", "TLS 1.2 supported"]
+          score: data.overall_score,
+          issues: Object.entries(data.security_headers).map(([header, value]) => ({
+            message: `${header}: ${String(value)}`,
+            severity: String(value) === 'Missing' ? 'high' : String(value).includes('Invalid') ? 'medium' : 'info'
+          })),
         },
         contentSecurity: {
-          score: 70,
-          issues: ["Missing CSP header", "X-Frame-Options not set"]
+          score: data.overall_score,
+          issues: data.recommendations
+            .filter((rec: string) => rec.includes('CSP') || rec.includes('security'))
+            .map((rec: string) => ({
+              message: rec,
+              severity: rec.toLowerCase().includes('critical') ? 'high' : 
+                       rec.toLowerCase().includes('implement') ? 'medium' : 'low'
+            })),
         },
         vulnerabilities: {
-          score: 90,
-          issues: ["No critical vulnerabilities found", "Server version exposed"]
+          score: data.overall_score,
+          issues: data.xss_check.issues.map((issue: string) => ({
+            message: issue,
+            severity: 'high'
+          })),
         },
         phishing: {
-          score: 95,
-          issues: ["No suspicious redirects detected", "Domain age verification passed"]
+          score: data.overall_score,
+          issues: data.phishing_check.suspicious_patterns.map((pattern: string) => ({
+            message: pattern,
+            severity: data.phishing_check.risk_level === 'high' ? 'high' : 
+                     data.phishing_check.risk_level === 'medium' ? 'medium' : 'low'
+          })),
         },
         malware: {
-          score: 100,
-          issues: ["No malware detected", "Clean in major blacklists"]
+          score: data.overall_score,
+          issues: data.malware_check.suspicious_patterns.map((pattern: string) => ({
+            message: pattern,
+            severity: data.malware_check.risk_level === 'high' ? 'high' : 
+                     data.malware_check.risk_level === 'medium' ? 'medium' : 'low'
+          })),
         },
         webAttacks: {
-          score: 80,
-          issues: ["CSRF tokens implemented", "XSS protection headers missing"]
+          score: data.overall_score,
+          issues: data.csrf_check.issues.map((issue: string) => ({
+            message: issue,
+            severity: issue.includes('No CSRF protection') ? 'high' : 'medium'
+          })),
         },
         certificateTransparency: {
-          score: 90,
-          issues: ["Certificate logged in CT logs", "Multiple CT log providers found"]
+          score: data.overall_score,
+          issues: [{
+            message: data.ct_check.ct_status,
+            severity: data.ct_check.ct_status.includes('Not found') ? 'high' : 'info'
+          }],
         },
         libraries: {
-          score: 75,
-          issues: ["jQuery version outdated", "3 npm packages need updates"]
+          score: data.overall_score,
+          issues: data.recommendations
+            .filter((rec: string) => rec.includes('upgrade') || rec.includes('implement'))
+            .map((rec: string) => ({
+              message: rec,
+              severity: rec.toLowerCase().includes('critical') ? 'high' : 'medium'
+            })),
         }
-      })
+      });
+
+      toast.success('Analysis completed', {
+        description: 'Security check completed successfully.',
+        id: loadingToast,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      
+      toast.error('Analysis failed', {
+        description: errorMessage,
+        id: loadingToast,
+        action: {
+          label: 'Try Again',
+          onClick: () => handleSubmit(e),
+        },
+        duration: 5000,
+      });
+
+      console.error('Error analyzing website:', error);
+    } finally {
       setIsLoading(false)
-    }, 2000)
+    }
   }
 
   const handleUrlDetected = (detectedUrl: string) => {
@@ -99,6 +181,18 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: 'var(--background)',
+            color: 'var(--foreground)',
+            border: '1px solid var(--border)',
+          },
+          className: 'text-sm font-medium',
+        }}
+        closeButton
+      />
       <header className="px-4 lg:px-6 h-14 flex items-center border-b">
         <Link href="/" className="flex items-center justify-center">
           <Shield className="h-6 w-6 text-primary" />
@@ -158,110 +252,38 @@ export default function Home() {
                 Security Analysis Results
               </h2>
               <div className="grid gap-6 lg:grid-cols-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>SSL/TLS</CardTitle>
-                    <CardDescription>Score: {analysisResult.ssl.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.ssl.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Content Security</CardTitle>
-                    <CardDescription>Score: {analysisResult.contentSecurity.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.contentSecurity.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Vulnerabilities</CardTitle>
-                    <CardDescription>Score: {analysisResult.vulnerabilities.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.vulnerabilities.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Phishing Detection</CardTitle>
-                    <CardDescription>Score: {analysisResult.phishing.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.phishing.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Malware Scan</CardTitle>
-                    <CardDescription>Score: {analysisResult.malware.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.malware.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Web Attacks Protection</CardTitle>
-                    <CardDescription>Score: {analysisResult.webAttacks.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.webAttacks.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Certificate Transparency</CardTitle>
-                    <CardDescription>Score: {analysisResult.certificateTransparency.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.certificateTransparency.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Library Analysis</CardTitle>
-                    <CardDescription>Score: {analysisResult.libraries.score}/100</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-4">
-                      {analysisResult.libraries.issues.map((issue, index) => (
-                        <li key={index}>{issue}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
+                {Object.entries(analysisResult).map(([key, data]) => (
+                  <Card key={key} className="overflow-hidden">
+                    <CardHeader className={`border-b ${getScoreColorClass(data.score)}`}>
+                      <CardTitle className="flex items-center gap-2">
+                        {getSecurityIcon(key)}
+                        {formatTitle(key)}
+                      </CardTitle>
+                      <CardDescription className="font-semibold">
+                        Score: {data.score}/100
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      <div className="space-y-4">
+                        {data.issues.length === 0 ? (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <span>No issues found</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {data.issues.map((issue: SecurityIssue, index: number) => (
+                              <div key={index} className={`flex items-start gap-2 ${getSeverityColorClass(issue.severity)}`}>
+                                {getSeverityIcon(issue.severity)}
+                                <span className="text-sm">{issue.message}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
           </section>
@@ -370,3 +392,66 @@ export default function Home() {
     </div>
   )
 }
+
+const getScoreColorClass = (score: number) => {
+  if (score >= 90) return 'bg-green-50';
+  if (score >= 70) return 'bg-yellow-50';
+  return 'bg-red-50';
+};
+
+const getSeverityColorClass = (severity: string) => {
+  switch (severity) {
+    case 'high':
+      return 'text-red-600';
+    case 'medium':
+      return 'text-yellow-600';
+    case 'low':
+      return 'text-orange-600';
+    default:
+      return 'text-blue-600';
+  }
+};
+
+const getSeverityIcon = (severity: string) => {
+  switch (severity) {
+    case 'high':
+      return <XCircle className="h-5 w-5 shrink-0" />;
+    case 'medium':
+      return <AlertTriangle className="h-5 w-5 shrink-0" />;
+    case 'low':
+      return <AlertOctagon className="h-5 w-5 shrink-0" />;
+    default:
+      return <CheckCircle2 className="h-5 w-5 shrink-0" />;
+  }
+};
+
+const getSecurityIcon = (key: string) => {
+  switch (key) {
+    case 'ssl':
+      return <Lock className="h-5 w-5" />;
+    case 'contentSecurity':
+      return <Shield className="h-5 w-5" />;
+    case 'vulnerabilities':
+      return <AlertTriangle className="h-5 w-5" />;
+    case 'phishing':
+      return <Eye className="h-5 w-5" />;
+    case 'malware':
+      return <FileWarning className="h-5 w-5" />;
+    case 'webAttacks':
+      return <Webhook className="h-5 w-5" />;
+    case 'certificateTransparency':
+      return <CheckCircle2 className="h-5 w-5" />;
+    case 'libraries':
+      return <FileWarning className="h-5 w-5" />;
+    default:
+      return <Shield className="h-5 w-5" />;
+  }
+};
+
+const formatTitle = (key: string) => {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
