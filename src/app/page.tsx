@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Shield, Lock, Eye, AlertTriangle, Camera, Webhook, FileWarning, CheckCircle2, XCircle, AlertOctagon } from 'lucide-react'
 import { UrlScanner } from '@/components/url-scanner'
 import { env } from '@/config/env'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 
@@ -55,6 +63,12 @@ export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [url, setUrl] = useState('')
+  const [showSafetyDialog, setShowSafetyDialog] = useState(false)
+  const [safetyStatus, setSafetyStatus] = useState<{
+    status: 'safe' | 'caution' | 'unsafe',
+    title: string,
+    description: string
+  } | null>(null)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -152,6 +166,34 @@ export default function Home() {
         }
       });
 
+      // Calculate website safety
+      const avgScore = Object.values(analysisResult || {}).reduce((acc, curr) => acc + curr.score, 0) / 8;
+      const hasHighSeverityIssues = Object.values(analysisResult || {}).some(
+        category => category.issues.some((issue: SecurityIssue) => issue.severity === 'high')
+      );
+      
+      // Set safety status and show dialog
+      if (avgScore >= 80 && !hasHighSeverityIssues) {
+        setSafetyStatus({
+          status: 'safe',
+          title: 'Website Appears Safe',
+          description: 'This website has good security practices in place. You can proceed with confidence.'
+        });
+      } else if (avgScore >= 60 && !hasHighSeverityIssues) {
+        setSafetyStatus({
+          status: 'caution',
+          title: 'Exercise Caution',
+          description: 'This website has some security concerns. Be careful when sharing sensitive information.'
+        });
+      } else {
+        setSafetyStatus({
+          status: 'unsafe',
+          title: 'Security Risks Detected',
+          description: 'This website has significant security issues. We strongly recommend against proceeding.'
+        });
+      }
+      setShowSafetyDialog(true);
+
       toast.success('Analysis completed', {
         description: 'Security check completed successfully.',
         id: loadingToast,
@@ -181,6 +223,57 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <Dialog open={showSafetyDialog} onOpenChange={setShowSafetyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {safetyStatus?.status === 'safe' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+              {safetyStatus?.status === 'caution' && <AlertTriangle className="h-5 w-5 text-yellow-500" />}
+              {safetyStatus?.status === 'unsafe' && <XCircle className="h-5 w-5 text-red-500" />}
+              {safetyStatus?.title}
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              {safetyStatus?.description}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {analysisResult && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span>Overall Security Score:</span>
+                  <span className={`font-bold ${
+                    (() => {
+                      const avgScore = Object.values(analysisResult).reduce((acc, curr) => acc + curr.score, 0) / 8;
+                      return avgScore >= 80 ? 'text-green-500' :
+                             avgScore >= 60 ? 'text-yellow-500' :
+                             'text-red-500';
+                    })()
+                  }`}>
+                    {Math.round(Object.values(analysisResult).reduce((acc, curr) => acc + curr.score, 0) / 8)}/100
+                  </span>
+                </div>
+                {Object.values(analysisResult).some(
+                  category => category.issues.some((issue: SecurityIssue) => issue.severity === 'high')
+                ) && (
+                  <div className="text-red-500 flex items-center gap-2">
+                    <AlertOctagon className="h-4 w-4" />
+                    <span>Critical security issues detected</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant={safetyStatus?.status === 'unsafe' ? 'destructive' : 'default'}
+              onClick={() => setShowSafetyDialog(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toaster 
         position="top-center"
         toastOptions={{
